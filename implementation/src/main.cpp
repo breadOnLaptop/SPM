@@ -4,11 +4,30 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
+#include <limits>
 #include "../include/ProcessMonitor.h"
 #include "../include/ProcessControl.h"
 #include "../include/Logger.h"
 
 using namespace std;
+
+// Robust integer input helper.
+int getSafeInt(const string& prompt = "Enter choice: ") {
+    int value;
+    while (true) {
+        cout << prompt;
+        if (cin >> value) {
+            // Success, consume the newline character left in the buffer.
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            return value;
+        } else {
+            // Failure, clear error state and discard invalid input.
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "[ERROR] Invalid input. Please enter a valid number." << endl;
+        }
+    }
+}
 
 // Helper function to center align a string.
 string centerString(const string &s, int width) {
@@ -82,8 +101,8 @@ int main() {
         cout << "3. Change Process Priority" << endl;
         cout << "4. Update Process Log" << endl;
         cout << "5. Exit" << endl;
-        cout << "Enter your choice: ";
-        cin >> choice;
+        
+        choice = getSafeInt("Enter your choice: ");
         
         switch (choice) {
             case 1: {
@@ -93,20 +112,18 @@ int main() {
                 break;
             }
             case 2: {
-                cout << "Enter PID to kill: ";
-                cin >> pid;
+                pid = getSafeInt("Enter PID to kill: ");
                 if (killProcess(pid)) {
                     cout << "Process " << pid << " killed successfully." << endl;
                     ImplementationLogger::log(ImplementationLogger::INFO, "Killed process with PID " + to_string(pid));
                 } else {
-                    cout << "Failed to kill process " << pid << "." << endl;
+                    cout << "[ERROR] Failed to kill process " << pid << ". Ensure you have sufficient permissions." << endl;
                     ImplementationLogger::log(ImplementationLogger::LOG_ERROR, "Failed to kill process with PID " + to_string(pid));
                 }
                 break;
             }
             case 3: {
-                cout << "Enter PID to change priority: ";
-                cin >> pid;
+                pid = getSafeInt("Enter PID to change priority: ");
                 
                 // Retrieve current processes to check if PID exists.
                 auto processes = listProcesses();
@@ -122,8 +139,9 @@ int main() {
                 Process beforeChange = getProcessInfo(pid);
                 cout << "Current priority for process " << pid << ": " << beforeChange.priority << endl;
                 cout << "For Windows, use 1 (Idle) to 5 (High)." << endl;
-                cout << "For Linux, enter desired nice value (-20 to 19): ";
-                cin >> newPriority;
+                cout << "For Linux, enter desired nice value (-20 to 19)." << endl;
+                newPriority = getSafeInt("Enter desired priority: ");
+
                 if (changeProcessPriority(pid, newPriority)) {
                     Process afterChange = getProcessInfo(pid);
                     cout << "Priority changed successfully for process " << pid << "." << endl;
@@ -132,7 +150,7 @@ int main() {
                         " from " + to_string(beforeChange.priority) +
                         " to " + to_string(afterChange.priority));
                 } else {
-                    cout << "Failed to change priority for process " << pid << "." << endl;
+                    cout << "[ERROR] Failed to change priority for process " << pid << ". Access denied or invalid priority level." << endl;
                     ImplementationLogger::log(ImplementationLogger::LOG_ERROR, "Failed to change priority for PID " + to_string(pid));
                 }
                 break;
