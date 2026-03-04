@@ -167,6 +167,9 @@ CMakeFiles/spm.dir/src/main.cpp.obj: \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/atomic \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/atomic_base.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/atomic_lockfree_defines.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/deque \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_deque.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/deque.tcc \
  D:/project/system/SPM/implementation/include/ProcessMonitor.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/sstream \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/sstream.tcc \
@@ -465,6 +468,7 @@ CMakeFiles/spm.dir/src/main.cpp.obj: \
  D:/project/system/SPM/implementation/include/WindowManager.h \
  D:/project/system/SPM/implementation/third_party/glfw/include/GLFW/glfw3.h \
  D:/software/programming/msys2/ucrt64/include/GL/gl.h \
+ D:/project/system/SPM/implementation/include/SystemMetrics.h \
  D:/project/system/SPM/implementation/third_party/imgui/imgui.h \
  D:/project/system/SPM/implementation/third_party/imgui/imconfig.h \
  D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/float.h \

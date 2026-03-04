@@ -5,18 +5,35 @@
 #include <chrono>
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include "../include/ProcessMonitor.h"
 #include "../include/ProcessControl.h"
 #include "../include/Logger.h"
 #include "../include/WindowManager.h"
+#include "../include/SystemMetrics.h"
 #include "imgui.h"
 
 using namespace std;
 
 // Global state
 ProcessSnapshot g_Snapshot;
+SystemMetrics g_Metrics;
 atomic<bool> g_Running(true);
-atomic<int> g_RefreshIntervalMs(2000); // Default 2s
+atomic<int> g_RefreshIntervalMs(2000);
+
+// Rolling buffer for graphs
+struct RollingBuffer {
+    deque<float> data;
+    size_t maxSize;
+    RollingBuffer(size_t size) : maxSize(size) {
+        data.resize(size, 0.0f);
+    }
+    void add(float val) {
+        data.push_back(val);
+        if (data.size() > maxSize) data.pop_front();
+    }
+    const float* getData() { return &data[0]; }
+};
 
 // Background thread for automatic refresh.
 void backgroundRefresh() {
@@ -26,7 +43,6 @@ void backgroundRefresh() {
             g_Snapshot.refresh();
             this_thread::sleep_for(chrono::milliseconds(interval));
         } else {
-            // Paused: Sleep a bit to avoid busy-waiting.
             this_thread::sleep_for(chrono::milliseconds(500));
         }
     }
@@ -42,12 +58,10 @@ bool isSystemProcess(const string& owner) {
 }
 
 int main() {
-    // Initialize loggers.
     ImplementationLogger::init("logs/implementation_log.txt");
     ProcessLogger::init("logs/process_log.txt");
     ImplementationLogger::log(ImplementationLogger::INFO, "SPM GUI started.");
 
-    // Initial refresh and start background thread.
     g_Snapshot.refresh();
     thread refreshThread(backgroundRefresh);
 
@@ -61,146 +75,148 @@ int main() {
     static char searchFilter[128] = "";
     static int selectedPid = -1;
     static string selectedOwner = "";
-    static int refreshChoice = 2; // Index for 2s
+    static int refreshChoice = 2;
+
+    RollingBuffer cpuBuffer(60);
+    RollingBuffer ramBuffer(60);
+    float lastMetricUpdate = 0;
 
     // Main loop
     while (!windowManager.shouldClose()) {
         windowManager.startFrame();
 
-        // UI Code
+        // Update metrics every 1s regardless of process refresh rate
+        float currentTime = (float)ImGui::GetTime();
+        if (currentTime - lastMetricUpdate > 1.0f) {
+            cpuBuffer.add((float)g_Metrics.getCPUUsage());
+            ramBuffer.add((float)g_Metrics.getRAMUsage());
+            lastMetricUpdate = currentTime;
+        }
+
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
         ImGui::Begin("Dashboard", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
-        ImGui::Columns(2, "MainColumns", true);
-        ImGui::SetColumnWidth(0, ImGui::GetIO().DisplaySize.x * 0.75f);
+        if (ImGui::BeginTabBar("MainTabs")) {
+            
+            // --- TAB 1: PROCESSES ---
+            if (ImGui::BeginTabItem("Processes")) {
+                ImGui::Columns(2, "MainColumns", true);
+                ImGui::SetColumnWidth(0, ImGui::GetIO().DisplaySize.x * 0.75f);
 
-        // --- LEFT COLUMN: Process List ---
-        ImGui::Text("Smart Process Manager (SPM)");
-        ImGui::SameLine(ImGui::GetColumnWidth(0) - 220);
-        
-        const char* refreshRates[] = { "Paused", "500ms", "1s", "2s", "5s" };
-        int msValues[] = { 0, 500, 1000, 2000, 5000 };
-        
-        ImGui::PushItemWidth(120);
-        if (ImGui::Combo("Refresh", &refreshChoice, refreshRates, IM_ARRAYSIZE(refreshRates))) {
-            g_RefreshIntervalMs.store(msValues[refreshChoice]);
-        }
-        ImGui::PopItemWidth();
-        
-        ImGui::Separator();
-        
-        ImGui::PushItemWidth(-1);
-        if (ImGui::InputTextWithHint("##Search", "Search processes (e.g. chrome, explorer)...", searchFilter, IM_ARRAYSIZE(searchFilter))) {
-            // Optional: reset selection on search change to avoid confusion.
-        }
-        ImGui::PopItemWidth();
-
-        auto processes = g_Snapshot.getProcesses();
-        string filterStr = string(searchFilter);
-        transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
-
-        if (ImGui::BeginTable("ProcessTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
-            ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-            ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-            ImGui::TableSetupColumn("Mem (MB)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-            ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-            ImGui::TableHeadersRow();
-
-            bool foundSelection = false;
-            for (const auto& proc : processes) {
-                string nameLower = proc.name;
-                string ownerLower = proc.owner;
-                transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
-                transform(ownerLower.begin(), ownerLower.end(), ownerLower.begin(), ::tolower);
-
-                if (!filterStr.empty() && nameLower.find(filterStr) == string::npos && ownerLower.find(filterStr) == string::npos)
-                    continue;
-
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
+                // LEFT COLUMN
+                ImGui::Text("Smart Process Manager (SPM)");
+                ImGui::SameLine(ImGui::GetColumnWidth(0) - 220);
                 
-                bool isSelected = (selectedPid == proc.pid);
-                if (ImGui::Selectable(to_string(proc.pid).c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
-                    selectedPid = proc.pid;
-                    selectedOwner = proc.owner;
-                }
-                if (isSelected) foundSelection = true;
+                const char* refreshRates[] = { "Paused", "500ms", "1s", "2s", "5s" };
+                int msValues[] = { 0, 500, 1000, 2000, 5000 };
                 
-                ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%s", proc.name.c_str());
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", proc.status.c_str());
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%d", proc.priority);
-                ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%.2f", proc.memoryMB);
-                ImGui::TableSetColumnIndex(5);
-                ImGui::Text("%s", proc.owner.c_str());
-            }
-            // If selection is filtered out, we keep it but the user can't see it.
-            // Usually fine, but if we want to clear it:
-            // if (!foundSelection) selectedPid = -1;
-
-            ImGui::EndTable();
-        }
-
-        ImGui::NextColumn();
-
-        // --- RIGHT COLUMN: Actions ---
-        ImGui::Text("Actions & Details");
-        ImGui::Separator();
-
-        if (selectedPid != -1) {
-            ImGui::Text("PID: %d", selectedPid);
-            ImGui::Text("Owner: %s", selectedOwner.c_str());
-            
-            bool isProtected = isSystemProcess(selectedOwner);
-            
-            if (isProtected) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
-                ImGui::TextWrapped("System Protection: Actions disabled for security.");
-                ImGui::PopStyleColor();
-                ImGui::BeginDisabled();
-            }
-
-            ImGui::Spacing();
-            if (ImGui::Button("Terminate Process", ImVec2(-FLT_MIN, 40))) {
-                if (killProcess(selectedPid)) {
-                    ImplementationLogger::log(ImplementationLogger::INFO, "GUI: Terminated PID " + to_string(selectedPid));
-                    selectedPid = -1;
-                    g_Snapshot.refresh();
+                ImGui::PushItemWidth(120);
+                if (ImGui::Combo("Refresh", &refreshChoice, refreshRates, IM_ARRAYSIZE(refreshRates))) {
+                    g_RefreshIntervalMs.store(msValues[refreshChoice]);
                 }
-            }
+                ImGui::PopItemWidth();
+                
+                ImGui::Separator();
+                ImGui::PushItemWidth(-1);
+                ImGui::InputTextWithHint("##Search", "Search processes (e.g. chrome, explorer)...", searchFilter, IM_ARRAYSIZE(searchFilter));
+                ImGui::PopItemWidth();
 
-            ImGui::Separator();
-            ImGui::Text("Priority Class:");
-            static int priorityLevel = 2; // Normal
-            const char* levels[] = { "Idle", "Below Normal", "Normal", "Above Normal", "High" };
-            ImGui::Combo("##PriorityCombo", &priorityLevel, levels, IM_ARRAYSIZE(levels));
-            
-            if (ImGui::Button("Apply Priority", ImVec2(-FLT_MIN, 30))) {
-                if (changeProcessPriority(selectedPid, priorityLevel + 1)) {
-                    ImplementationLogger::log(ImplementationLogger::INFO, "GUI: Changed Priority for PID " + to_string(selectedPid));
+                auto processes = g_Snapshot.getProcesses();
+                string filterStr = string(searchFilter);
+                transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
+
+                if (ImGui::BeginTable("ProcessTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
+                    ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Mem (MB)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& proc : processes) {
+                        string nameLower = proc.name;
+                        string ownerLower = proc.owner;
+                        transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+                        transform(ownerLower.begin(), ownerLower.end(), ownerLower.begin(), ::tolower);
+
+                        if (!filterStr.empty() && nameLower.find(filterStr) == string::npos && ownerLower.find(filterStr) == string::npos)
+                            continue;
+
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        bool isSelected = (selectedPid == proc.pid);
+                        if (ImGui::Selectable(to_string(proc.pid).c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                            selectedPid = proc.pid;
+                            selectedOwner = proc.owner;
+                        }
+                        ImGui::TableSetColumnIndex(1); ImGui::Text("%s", proc.name.c_str());
+                        ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
+                        ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
+                        ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
+                        ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+                    }
+                    ImGui::EndTable();
                 }
+
+                ImGui::NextColumn();
+
+                // RIGHT COLUMN
+                ImGui::Text("Actions & Details");
+                ImGui::Separator();
+                if (selectedPid != -1) {
+                    ImGui::Text("PID: %d", selectedPid);
+                    ImGui::Text("Owner: %s", selectedOwner.c_str());
+                    bool isProtected = isSystemProcess(selectedOwner);
+                    if (isProtected) {
+                        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "System Protected");
+                        ImGui::BeginDisabled();
+                    }
+                    if (ImGui::Button("Terminate", ImVec2(-FLT_MIN, 40))) {
+                        if (killProcess(selectedPid)) { selectedPid = -1; g_Snapshot.refresh(); }
+                    }
+                    static int priorityLevel = 2;
+                    ImGui::Combo("Priority", &priorityLevel, "Idle\0Below Normal\0Normal\0Above Normal\0High\0");
+                    if (ImGui::Button("Apply", ImVec2(-FLT_MIN, 30))) { changeProcessPriority(selectedPid, priorityLevel + 1); }
+                    if (isProtected) ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled("Select a process...");
+                }
+                ImGui::EndTabItem();
             }
 
-            if (isProtected) {
-                ImGui::EndDisabled();
+            // --- TAB 2: PERFORMANCE ---
+            if (ImGui::BeginTabItem("Performance")) {
+                ImGui::Text("Global System Performance");
+                ImGui::Separator();
+
+                float currentCPU = cpuBuffer.data.back();
+                float currentRAM = ramBuffer.data.back();
+
+                ImGui::Text("CPU Usage: %.1f%%", currentCPU);
+                ImGui::ProgressBar(currentCPU / 100.0f, ImVec2(-FLT_MIN, 0));
+                ImGui::PlotLines("##CPUGraph", cpuBuffer.getData(), (int)cpuBuffer.data.size(), 0, nullptr, 0.0f, 100.0f, ImVec2(-FLT_MIN, 150));
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                ImGui::Text("RAM Usage: %.1f%%", currentRAM);
+                ImGui::ProgressBar(currentRAM / 100.0f, ImVec2(-FLT_MIN, 0));
+                ImGui::PlotLines("##RAMGraph", ramBuffer.getData(), (int)ramBuffer.data.size(), 0, nullptr, 0.0f, 100.0f, ImVec2(-FLT_MIN, 150));
+
+                ImGui::EndTabItem();
             }
-        } else {
-            ImGui::TextDisabled("Select a process from the table\nto view details and actions.");
+
+            ImGui::EndTabBar();
         }
 
         ImGui::End();
-
         windowManager.endFrame();
     }
 
     g_Running = false;
     refreshThread.join();
-    ImplementationLogger::log(ImplementationLogger::INFO, "Exiting SPM GUI.");
     return 0;
 }
