@@ -163,6 +163,7 @@ CMakeFiles/spm.dir/src/main.cpp.obj: D:/project/system/SPM/implementation/src/ma
   D:/project/system/SPM/implementation/include/Logger.h \
   D:/project/system/SPM/implementation/include/ProcessControl.h \
   D:/project/system/SPM/implementation/include/ProcessMonitor.h \
+  D:/project/system/SPM/implementation/include/SystemMetrics.h \
   D:/project/system/SPM/implementation/include/WindowManager.h \
   D:/project/system/SPM/implementation/third_party/glfw/include/GLFW/glfw3.h \
   D:/project/system/SPM/implementation/third_party/imgui/imconfig.h \
@@ -203,6 +204,7 @@ CMakeFiles/spm.dir/src/main.cpp.obj: D:/project/system/SPM/implementation/src/ma
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/cpp_type_traits.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/cxxabi_forced.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/cxxabi_init_exception.h \
+  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/deque.tcc \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/exception.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/exception_defines.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/exception_ptr.h \
@@ -243,6 +245,7 @@ CMakeFiles/spm.dir/src/main.cpp.obj: D:/project/system/SPM/implementation/src/ma
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_algobase.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_bvector.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_construct.h \
+  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_deque.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_function.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_heap.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_iterator.h \
@@ -275,6 +278,7 @@ CMakeFiles/spm.dir/src/main.cpp.obj: D:/project/system/SPM/implementation/src/ma
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/cwctype \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/debug/assertions.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/debug/debug.h \
+  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/deque \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/exception \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/ext/alloc_traits.h \
   D:/software/programming/msys2/ucrt64/include/c++/15.2.0/ext/atomicity.h \
@@ -1922,8 +1926,6 @@ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/math.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/cmath:
 
-D:/project/system/SPM/implementation/third_party/imgui/backends/imgui_impl_opengl3_loader.h:
-
 D:/project/system/SPM/implementation/third_party/imgui/backends/imgui_impl_glfw.cpp:
 
 D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/xtestintrin.h:
@@ -2194,6 +2196,10 @@ D:/software/programming/msys2/ucrt64/include/nb30.h:
 
 D:/software/programming/msys2/ucrt64/include/namedpipeapi.h:
 
+D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/pmmintrin.h:
+
+D:/software/programming/msys2/ucrt64/include/mmsyscom.h:
+
 D:/software/programming/msys2/ucrt64/include/pthread.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/parse_numbers.h:
@@ -2215,8 +2221,6 @@ D:/software/programming/msys2/ucrt64/include/locale.h:
 D:/software/programming/msys2/ucrt64/include/psapi.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/x86_64-w64-mingw32/bits/c++config.h:
-
-D:/software/programming/msys2/ucrt64/include/c++/15.2.0/debug/debug.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/x86_64-w64-mingw32/bits/gthr.h:
 
@@ -2269,10 +2273,6 @@ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/exception:
 D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/amxcomplexintrin.h:
 
 D:/software/programming/msys2/ucrt64/include/pthread_signal.h:
-
-D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/pmmintrin.h:
-
-D:/software/programming/msys2/ucrt64/include/mmsyscom.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/x86_64-w64-mingw32/bits/c++allocator.h:
 
@@ -2362,6 +2362,8 @@ D:/software/programming/msys2/ucrt64/include/io.h:
 
 D:/software/programming/msys2/ucrt64/include/assert.h:
 
+D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_deque.h:
+
 D:/software/programming/msys2/ucrt64/include/pthread_time.h:
 
 D:/software/programming/msys2/ucrt64/include/limits.h:
@@ -2369,6 +2371,12 @@ D:/software/programming/msys2/ucrt64/include/limits.h:
 D:/software/programming/msys2/ucrt64/include/_mingw_off_t.h:
 
 D:/software/programming/msys2/ucrt64/include/corecrt.h:
+
+D:/software/programming/msys2/ucrt64/include/wincontypes.h:
+
+D:/software/programming/msys2/ucrt64/include/msxml.h:
+
+D:/software/programming/msys2/ucrt64/include/pthread_compat.h:
 
 D:/software/programming/msys2/ucrt64/include/corecrt_stdio_config.h:
 
@@ -2608,6 +2616,10 @@ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/locale:
 
 D:/software/programming/msys2/ucrt64/include/pthread_unistd.h:
 
+D:/project/system/SPM/implementation/third_party/imgui/backends/imgui_impl_opengl3_loader.h:
+
+D:/software/programming/msys2/ucrt64/include/c++/15.2.0/deque:
+
 D:/software/programming/msys2/ucrt64/include/sched.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/ext/numeric_traits.h:
@@ -2658,12 +2670,6 @@ D:/software/programming/msys2/ucrt64/include/stdlib.h:
 
 D:/software/programming/msys2/ucrt64/include/jobapi.h:
 
-D:/software/programming/msys2/ucrt64/include/wincontypes.h:
-
-D:/software/programming/msys2/ucrt64/include/pthread_compat.h:
-
-D:/software/programming/msys2/ucrt64/include/msxml.h:
-
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/locale_classes.tcc:
 
 D:/software/programming/msys2/ucrt64/include/sec_api/wconio_s.h:
@@ -2699,6 +2705,10 @@ D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/r
 D:/software/programming/msys2/ucrt64/include/vadefs.h:
 
 D:/software/programming/msys2/ucrt64/include/consoleapi3.h:
+
+D:/software/programming/msys2/ucrt64/include/mmiscapi2.h:
+
+D:/software/programming/msys2/ucrt64/include/fibersapi.h:
 
 D:/project/system/SPM/implementation/third_party/imgui/imgui_internal.h:
 
@@ -2738,6 +2748,10 @@ D:/software/programming/msys2/ucrt64/include/ctype.h:
 
 D:/project/system/SPM/implementation/include/ProcessMonitor.h:
 
+D:/software/programming/msys2/ucrt64/include/c++/15.2.0/debug/debug.h:
+
+D:/project/system/SPM/implementation/include/SystemMetrics.h:
+
 D:/software/programming/msys2/ucrt64/include/imm.h:
 
 D:/software/programming/msys2/ucrt64/include/apiset.h:
@@ -2761,6 +2775,8 @@ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/atomic_base.h:
 D:/software/programming/msys2/ucrt64/include/float.h:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/codecvt.h:
+
+D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/deque.tcc:
 
 D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_tempbuf.h:
 
@@ -2875,7 +2891,3 @@ D:/software/programming/msys2/ucrt64/include/libloaderapi.h:
 D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/avxvnniintrin.h:
 
 D:/software/programming/msys2/ucrt64/include/mciapi.h:
-
-D:/software/programming/msys2/ucrt64/include/fibersapi.h:
-
-D:/software/programming/msys2/ucrt64/include/mmiscapi2.h:

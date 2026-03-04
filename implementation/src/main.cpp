@@ -77,8 +77,8 @@ int main() {
     static string selectedOwner = "";
     static int refreshChoice = 2;
 
-    RollingBuffer cpuBuffer(60);
-    RollingBuffer ramBuffer(60);
+    RollingBuffer cpuBuffer(100);
+    RollingBuffer ramBuffer(100);
     float lastMetricUpdate = 0;
 
     // Main loop
@@ -87,7 +87,7 @@ int main() {
 
         // Update metrics every 1s regardless of process refresh rate
         float currentTime = (float)ImGui::GetTime();
-        if (currentTime - lastMetricUpdate > 1.0f) {
+        if (currentTime - lastMetricUpdate >= 1.0f) {
             cpuBuffer.add((float)g_Metrics.getCPUUsage());
             ramBuffer.add((float)g_Metrics.getRAMUsage());
             lastMetricUpdate = currentTime;
@@ -183,6 +183,8 @@ int main() {
                 } else {
                     ImGui::TextDisabled("Select a process...");
                 }
+                
+                ImGui::Columns(1); // Reset columns
                 ImGui::EndTabItem();
             }
 
@@ -195,16 +197,16 @@ int main() {
                 float currentRAM = ramBuffer.data.back();
 
                 ImGui::Text("CPU Usage: %.1f%%", currentCPU);
-                ImGui::ProgressBar(currentCPU / 100.0f, ImVec2(-FLT_MIN, 0));
-                ImGui::PlotLines("##CPUGraph", cpuBuffer.getData(), (int)cpuBuffer.data.size(), 0, nullptr, 0.0f, 100.0f, ImVec2(-FLT_MIN, 150));
+                ImGui::ProgressBar(currentCPU / 100.0f, ImVec2(-FLT_MIN, 30));
+                ImGui::PlotLines("##CPUGraph", cpuBuffer.getData(), (int)cpuBuffer.data.size(), 0, "CPU History (60s)", 0.0f, 100.0f, ImVec2(-FLT_MIN, 200));
 
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::Spacing();
 
                 ImGui::Text("RAM Usage: %.1f%%", currentRAM);
-                ImGui::ProgressBar(currentRAM / 100.0f, ImVec2(-FLT_MIN, 0));
-                ImGui::PlotLines("##RAMGraph", ramBuffer.getData(), (int)ramBuffer.data.size(), 0, nullptr, 0.0f, 100.0f, ImVec2(-FLT_MIN, 150));
+                ImGui::ProgressBar(currentRAM / 100.0f, ImVec2(-FLT_MIN, 30));
+                ImGui::PlotLines("##RAMGraph", ramBuffer.getData(), (int)ramBuffer.data.size(), 0, "RAM History (60s)", 0.0f, 100.0f, ImVec2(-FLT_MIN, 200));
 
                 ImGui::EndTabItem();
             }
