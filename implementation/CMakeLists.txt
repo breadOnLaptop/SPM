@@ -4,12 +4,37 @@ project(SPM)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# GLFW Setup
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(third_party/glfw)
+
+# ImGui Setup
+set(IMGUI_DIR third_party/imgui)
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
 include_directories(include)
+include_directories(${IMGUI_DIR})
+include_directories(${IMGUI_DIR}/backends)
+include_directories(third_party/glfw/include)
 
 file(GLOB SOURCES "src/*.cpp")
 
-add_executable(spm ${SOURCES})
+add_executable(spm ${SOURCES} ${IMGUI_SOURCES})
+
+target_link_libraries(spm glfw)
 
 if(WIN32)
-    target_link_libraries(spm psapi)
+    target_link_libraries(spm psapi opengl32 gdi32 imm32)
+else()
+    target_link_libraries(spm GL dl pthread)
 endif()

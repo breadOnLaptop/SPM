@@ -22,10 +22,13 @@ CMakeFiles/spm.dir/src/main.cpp.obj
  D:/software/programming/msys2/ucrt64/include/bcrypt.h
  D:/software/programming/msys2/ucrt64/include/bemapiset.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/algorithm
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/atomic
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/backward/binders.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/algorithmfwd.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/alloc_traits.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/allocator.h
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/atomic_base.h
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/atomic_lockfree_defines.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/basic_ios.h
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/basic_ios.tcc
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/basic_string.h

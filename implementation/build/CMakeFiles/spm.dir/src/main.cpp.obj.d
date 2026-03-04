@@ -143,13 +143,6 @@ CMakeFiles/spm.dir/src/main.cpp.obj: \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_vector.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_bvector.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/vector.tcc \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/algorithm \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_algo.h \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/algorithmfwd.h \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_heap.h \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/uniform_int_dist.h \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_tempbuf.h \
- D:/software/programming/msys2/ucrt64/include/c++/15.2.0/limits \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/thread \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/std_thread.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/tuple \
@@ -161,10 +154,17 @@ CMakeFiles/spm.dir/src/main.cpp.obj: \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/cstdint \
  D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/stdint.h \
  D:/software/programming/msys2/ucrt64/include/stdint.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/limits \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/ctime \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/parse_numbers.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/chrono \
  D:/project/system/SPM/implementation/include/ProcessMonitor.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/algorithm \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_algo.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/algorithmfwd.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_heap.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/uniform_int_dist.h \
+ D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/stl_tempbuf.h \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/sstream \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/bits/sstream.tcc \
  D:/software/programming/msys2/ucrt64/include/c++/15.2.0/mutex \
@@ -462,4 +462,11 @@ CMakeFiles/spm.dir/src/main.cpp.obj: \
  D:/project/system/SPM/implementation/include/ProcessMonitor.h \
  D:/software/programming/msys2/ucrt64/include/direct.h \
  D:/software/programming/msys2/ucrt64/include/io.h \
- D:/project/system/SPM/implementation/include/Formatter.h
+ D:/project/system/SPM/implementation/include/WindowManager.h \
+ D:/project/system/SPM/implementation/third_party/glfw/include/GLFW/glfw3.h \
+ D:/software/programming/msys2/ucrt64/include/GL/gl.h \
+ D:/project/system/SPM/implementation/third_party/imgui/imgui.h \
+ D:/project/system/SPM/implementation/third_party/imgui/imconfig.h \
+ D:/software/programming/msys2/ucrt64/lib/gcc/x86_64-w64-mingw32/15.2.0/include/float.h \
+ D:/software/programming/msys2/ucrt64/include/float.h \
+ D:/software/programming/msys2/ucrt64/include/assert.h
