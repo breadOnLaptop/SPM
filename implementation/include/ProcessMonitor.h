@@ -10,10 +10,14 @@
 #ifdef _WIN32
     #include <windows.h>
     #include <tlhelp32.h>
+    #include <psapi.h>
+    #include <sddl.h>
 #else
     #include <dirent.h>
     #include <sys/types.h>
     #include <sys/resource.h>
+    #include <sys/stat.h>
+    #include <pwd.h>
     #include <cstdio>
 #endif
 
@@ -23,6 +27,8 @@ struct Process {
     std::string name;
     std::string status;
     int priority;
+    double memoryMB;
+    std::string owner;
 };
 
 #ifdef _WIN32
@@ -38,6 +44,45 @@ inline std::string wstringToUtf8(const std::wstring &wstr) {
     return strTo;
 }
 
+// Helper: Get owner of the process.
+inline std::string getProcessOwner(HANDLE hProcess) {
+    HANDLE hToken = NULL;
+    if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) return "Unknown";
+
+    DWORD dwSize = 0;
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        CloseHandle(hToken);
+        return "Unknown";
+    }
+
+    PTOKEN_USER pTokenUser = (PTOKEN_USER)malloc(dwSize);
+    if (!pTokenUser) {
+        CloseHandle(hToken);
+        return "Unknown";
+    }
+
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
+        free(pTokenUser);
+        CloseHandle(hToken);
+        return "Unknown";
+    }
+
+    WCHAR szName[256], szDomain[256];
+    DWORD dwNameSize = 256, dwDomainSize = 256;
+    SID_NAME_USE snu;
+    if (!LookupAccountSidW(NULL, pTokenUser->User.Sid, szName, &dwNameSize, szDomain, &dwDomainSize, &snu)) {
+        free(pTokenUser);
+        CloseHandle(hToken);
+        return "Unknown";
+    }
+
+    std::string owner = wstringToUtf8(szName);
+    free(pTokenUser);
+    CloseHandle(hToken);
+    return owner;
+}
+
 // Overload: getProcessInfo using PROCESSENTRY32.
 inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
     Process proc;
@@ -49,8 +94,13 @@ inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
         proc.name = std::string(pe32.szExeFile);
     #endif
 
-    // Retrieve process priority.
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+    // Default values.
+    proc.priority = 0;
+    proc.status = "Unknown";
+    proc.memoryMB = 0.0;
+    proc.owner = "Unknown";
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess) {
         DWORD prClass = GetPriorityClass(hProcess);
         if      (prClass == IDLE_PRIORITY_CLASS)           proc.priority = 1;
@@ -59,11 +109,18 @@ inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
         else if (prClass == ABOVE_NORMAL_PRIORITY_CLASS)   proc.priority = 4;
         else if (prClass == HIGH_PRIORITY_CLASS)           proc.priority = 5;
         else                                               proc.priority = 3;
-        proc.status = "Running";  // Windows does not expose detailed status.
+        proc.status = "Running";  // Windows does not expose detailed status via simple API.
+
+        // Get Memory Info.
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
+            proc.memoryMB = (double)pmc.WorkingSetSize / (1024.0 * 1024.0);
+        }
+
+        // Get Owner Info.
+        proc.owner = getProcessOwner(hProcess);
+
         CloseHandle(hProcess);
-    } else {
-        proc.priority = 0;
-        proc.status = "Unknown";
     }
     return proc;
 }
@@ -103,7 +160,37 @@ inline Process getProcessInfo(int pid) {
 inline Process getProcessInfo(int pid) {
     Process proc;
     proc.pid = pid;
-    std::string statPath = "/proc/" + std::to_string(pid) + "/stat";
+    proc.memoryMB = 0.0;
+    proc.owner = "Unknown";
+
+    // Get Owner
+    std::string procPath = "/proc/" + std::to_string(pid);
+    struct stat st;
+    if (stat(procPath.c_str(), &st) == 0) {
+        struct passwd *pw = getpwuid(st.st_uid);
+        if (pw) {
+            proc.owner = std::string(pw->pw_name);
+        }
+    }
+
+    // Get Memory from /proc/[pid]/status
+    std::string statusPath = procPath + "/status";
+    FILE* fs = fopen(statusPath.c_str(), "r");
+    if (fs) {
+        char line[256];
+        while (fgets(line, sizeof(line), fs)) {
+            if (strncmp(line, "VmRSS:", 6) == 0) {
+                long rss_kb;
+                if (sscanf(line + 6, "%ld", &rss_kb) == 1) {
+                    proc.memoryMB = (double)rss_kb / 1024.0;
+                }
+                break;
+            }
+        }
+        fclose(fs);
+    }
+
+    std::string statPath = procPath + "/stat";
     FILE* f = fopen(statPath.c_str(), "r");
     if (!f) {
         proc.name = "Unknown";

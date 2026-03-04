@@ -21,25 +21,29 @@ string centerString(const string &s, int width) {
 }
 
 // Helper function to print a horizontal line.
-void printHorizontalLine(int pidWidth, int nameWidth, int statusWidth, int priorityWidth) {
+void printHorizontalLine(int pidWidth, int nameWidth, int statusWidth, int priorityWidth, int memoryWidth, int ownerWidth) {
     cout << "+" 
          << string(pidWidth, '-') << "+"
          << string(nameWidth, '-') << "+"
          << string(statusWidth, '-') << "+"
          << string(priorityWidth, '-') << "+"
+         << string(memoryWidth, '-') << "+"
+         << string(ownerWidth, '-') << "+"
          << endl;
 }
 
 // Prints the process table to the console with table borders.
-void printProcesses(const vector<Process>& processes, int pidWidth = 5, int nameWidth = 25, int statusWidth = 12, int priorityWidth = 8) {
+void printProcesses(const vector<Process>& processes, int pidWidth = 7, int nameWidth = 20, int statusWidth = 15, int priorityWidth = 8, int memoryWidth = 12, int ownerWidth = 15) {
     // Print header.
-    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth);
+    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth, memoryWidth, ownerWidth);
     cout << "|" << centerString("PID", pidWidth)
          << "|" << centerString("Name", nameWidth)
          << "|" << centerString("Status", statusWidth)
          << "|" << centerString("Priority", priorityWidth)
+         << "|" << centerString("Mem (MB)", memoryWidth)
+         << "|" << centerString("Owner", ownerWidth)
          << "|" << endl;
-    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth);
+    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth, memoryWidth, ownerWidth);
 
     // Print each process row.
     for (const auto& proc : processes) {
@@ -47,13 +51,19 @@ void printProcesses(const vector<Process>& processes, int pidWidth = 5, int name
         if (displayName.length() > nameWidth) {
             displayName = displayName.substr(0, nameWidth - 3) + "...";
         }
+
+        stringstream memStream;
+        memStream << fixed << setprecision(2) << proc.memoryMB;
+
         cout << "|" << centerString(to_string(proc.pid), pidWidth)
              << "|" << centerString(displayName, nameWidth)
              << "|" << centerString(proc.status, statusWidth)
              << "|" << centerString(to_string(proc.priority), priorityWidth)
+             << "|" << centerString(memStream.str(), memoryWidth)
+             << "|" << centerString(proc.owner, ownerWidth)
              << "|" << endl;
     }
-    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth);
+    printHorizontalLine(pidWidth, nameWidth, statusWidth, priorityWidth, memoryWidth, ownerWidth);
 }
 
 int main() {

@@ -7,6 +7,8 @@
 #include <ctime>
 #include <mutex>
 #include <sstream>
+#include <iomanip>
+#include <vector>
 #ifdef _WIN32
     #include <direct.h>
     #define MKDIR(dir) _mkdir(dir)
@@ -100,7 +102,7 @@ public:
     // Updates the process log with a table-format output.
     static void update(const std::vector<struct Process>& processes) {
         std::ostringstream oss;
-        int pidWidth = 5, nameWidth = 25, statusWidth = 12, priorityWidth = 8;
+        int pidWidth = 7, nameWidth = 20, statusWidth = 15, priorityWidth = 8, memoryWidth = 12, ownerWidth = 15;
         
         // Lambda to center align a string.
         auto centerString = [](const std::string &s, int width) -> std::string {
@@ -115,7 +117,8 @@ public:
         // Lambda to create a horizontal line.
         auto horizontalLine = [&]() -> std::string {
             return "+" + std::string(pidWidth, '-') + "+" + std::string(nameWidth, '-') +
-                   "+" + std::string(statusWidth, '-') + "+" + std::string(priorityWidth, '-') + "+\n";
+                   "+" + std::string(statusWidth, '-') + "+" + std::string(priorityWidth, '-') + 
+                   "+" + std::string(memoryWidth, '-') + "+" + std::string(ownerWidth, '-') + "+\n";
         };
         
         oss << horizontalLine();
@@ -123,6 +126,8 @@ public:
             << "|" << centerString("Name", nameWidth)
             << "|" << centerString("Status", statusWidth)
             << "|" << centerString("Priority", priorityWidth)
+            << "|" << centerString("Mem (MB)", memoryWidth)
+            << "|" << centerString("Owner", ownerWidth)
             << "|\n";
         oss << horizontalLine();
         for(const auto &proc : processes) {
@@ -130,10 +135,16 @@ public:
             if(displayName.length() > nameWidth) {
                 displayName = displayName.substr(0, nameWidth - 3) + "...";
             }
+            
+            std::stringstream memStream;
+            memStream << std::fixed << std::setprecision(2) << proc.memoryMB;
+
             oss << "|" << centerString(std::to_string(proc.pid), pidWidth)
                 << "|" << centerString(displayName, nameWidth)
                 << "|" << centerString(proc.status, statusWidth)
                 << "|" << centerString(std::to_string(proc.priority), priorityWidth)
+                << "|" << centerString(memStream.str(), memoryWidth)
+                << "|" << centerString(proc.owner, ownerWidth)
                 << "|\n";
         }
         oss << horizontalLine();
