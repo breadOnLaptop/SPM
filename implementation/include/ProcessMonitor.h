@@ -6,6 +6,8 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
+#include <mutex>
+#include <atomic>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -19,6 +21,7 @@
     #include <sys/stat.h>
     #include <pwd.h>
     #include <cstdio>
+    #include <cstring>
 #endif
 
 // Structure representing a process.
@@ -32,7 +35,6 @@ struct Process {
 };
 
 #ifdef _WIN32
-
 // Helper: Convert std::wstring to UTF-8 std::string.
 inline std::string wstringToUtf8(const std::wstring &wstr) {
     if (wstr.empty()) return std::string();
@@ -94,7 +96,6 @@ inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
         proc.name = std::string(pe32.szExeFile);
     #endif
 
-    // Default values.
     proc.priority = 0;
     proc.status = "Unknown";
     proc.memoryMB = 0.0;
@@ -109,47 +110,33 @@ inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
         else if (prClass == ABOVE_NORMAL_PRIORITY_CLASS)   proc.priority = 4;
         else if (prClass == HIGH_PRIORITY_CLASS)           proc.priority = 5;
         else                                               proc.priority = 3;
-        proc.status = "Running";  // Windows does not expose detailed status via simple API.
+        proc.status = "Running";
 
-        // Get Memory Info.
         PROCESS_MEMORY_COUNTERS pmc;
         if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
             proc.memoryMB = (double)pmc.WorkingSetSize / (1024.0 * 1024.0);
         }
 
-        // Get Owner Info.
         proc.owner = getProcessOwner(hProcess);
-
         CloseHandle(hProcess);
     }
     return proc;
 }
 
-// Overload: getProcessInfo using only pid (searches the snapshot).
 inline Process getProcessInfo(int pid) {
     Process proc;
     HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hProcessSnap == INVALID_HANDLE_VALUE) {
-        std::cerr << "Error: Unable to create process snapshot." << std::endl;
-        return proc;
-    }
+    if (hProcessSnap == INVALID_HANDLE_VALUE) return proc;
+    
     PROCESSENTRY32 pe32;
     pe32.dwSize = sizeof(PROCESSENTRY32);
-    bool found = false;
     if (Process32First(hProcessSnap, &pe32)) {
         do {
             if (static_cast<int>(pe32.th32ProcessID) == pid) {
                 proc = getProcessInfo(pid, pe32);
-                found = true;
                 break;
             }
         } while (Process32Next(hProcessSnap, &pe32));
-    }
-    if (!found) {
-        proc.pid = pid;
-        proc.name = "Unknown";
-        proc.status = "Unknown";
-        proc.priority = 0;
     }
     CloseHandle(hProcessSnap);
     return proc;
@@ -163,17 +150,13 @@ inline Process getProcessInfo(int pid) {
     proc.memoryMB = 0.0;
     proc.owner = "Unknown";
 
-    // Get Owner
     std::string procPath = "/proc/" + std::to_string(pid);
     struct stat st;
     if (stat(procPath.c_str(), &st) == 0) {
         struct passwd *pw = getpwuid(st.st_uid);
-        if (pw) {
-            proc.owner = std::string(pw->pw_name);
-        }
+        if (pw) proc.owner = std::string(pw->pw_name);
     }
 
-    // Get Memory from /proc/[pid]/status
     std::string statusPath = procPath + "/status";
     FILE* fs = fopen(statusPath.c_str(), "r");
     if (fs) {
@@ -199,38 +182,26 @@ inline Process getProcessInfo(int pid) {
         return proc;
     }
     char buffer[1024];
-    if (!fgets(buffer, sizeof(buffer), f)) {
-        fclose(f);
-        proc.name = "Unknown";
-        proc.status = "Unknown";
-        proc.priority = 0;
-        return proc;
+    if (fgets(buffer, sizeof(buffer), f)) {
+        std::string line(buffer);
+        size_t start = line.find('(');
+        size_t end = line.find(')');
+        if (start != std::string::npos && end != std::string::npos && end > start) {
+            proc.name = line.substr(start + 1, end - start - 1);
+        }
+        size_t statePos = end + 2;
+        if (statePos < line.size()) {
+            char stateChar = line[statePos];
+            switch (stateChar) {
+                case 'R': proc.status = "Running"; break;
+                case 'S': proc.status = "Sleeping/Idle"; break;
+                case 'T': proc.status = "Stopped"; break;
+                case 'Z': proc.status = "Zombie"; break;
+                default: proc.status = "Unknown"; break;
+            }
+        }
     }
     fclose(f);
-    std::string line(buffer);
-    
-    // Extract process name (between parentheses).
-    size_t start = line.find('(');
-    size_t end = line.find(')');
-    if (start != std::string::npos && end != std::string::npos && end > start) {
-        proc.name = line.substr(start + 1, end - start - 1);
-    } else {
-        proc.name = "Unknown";
-    }
-    // Process status: character after the closing parenthesis.
-    size_t statePos = end + 2;
-    if (statePos < line.size()) {
-        char stateChar = line[statePos];
-        switch (stateChar) {
-            case 'R': proc.status = "Running"; break;
-            case 'S': proc.status = "Sleeping/Idle"; break;
-            case 'T': proc.status = "Stopped"; break;
-            case 'Z': proc.status = "Zombie"; break;
-            default: proc.status = "Unknown"; break;
-        }
-    } else {
-        proc.status = "Unknown";
-    }
     proc.priority = getpriority(PRIO_PROCESS, pid);
     return proc;
 }
@@ -242,32 +213,24 @@ inline std::vector<Process> listProcesses() {
     std::vector<Process> processes;
 #ifdef _WIN32
     HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hProcessSnap == INVALID_HANDLE_VALUE) {
-        std::cerr << "Error: Unable to create process snapshot." << std::endl;
-        return processes;
-    }
+    if (hProcessSnap == INVALID_HANDLE_VALUE) return processes;
     PROCESSENTRY32 pe32;
     pe32.dwSize = sizeof(PROCESSENTRY32);
     if (Process32First(hProcessSnap, &pe32)) {
         do {
-            int pid = static_cast<int>(pe32.th32ProcessID);
-            processes.push_back(getProcessInfo(pid, pe32));
+            processes.push_back(getProcessInfo(static_cast<int>(pe32.th32ProcessID), pe32));
         } while (Process32Next(hProcessSnap, &pe32));
     }
     CloseHandle(hProcessSnap);
 #else
     DIR* dir = opendir("/proc");
-    if (!dir) {
-        std::cerr << "Could not open /proc directory." << std::endl;
-        return processes;
-    }
+    if (!dir) return processes;
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_type == DT_DIR) {
             std::string dirname(entry->d_name);
             if (std::all_of(dirname.begin(), dirname.end(), ::isdigit)) {
-                int pid = std::stoi(dirname);
-                processes.push_back(getProcessInfo(pid));
+                processes.push_back(getProcessInfo(std::stoi(dirname)));
             }
         }
     }
@@ -275,5 +238,41 @@ inline std::vector<Process> listProcesses() {
 #endif
     return processes;
 }
+
+// Class to manage thread-safe process snapshots.
+class ProcessSnapshot {
+public:
+    ProcessSnapshot() : isUpdating_(false) {}
+
+    // Refreshes the snapshot data.
+    void refresh() {
+        bool expected = false;
+        if (!isUpdating_.compare_exchange_strong(expected, true)) return;
+
+        auto newProcesses = listProcesses();
+        
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            processes_ = std::move(newProcesses);
+        }
+        
+        isUpdating_ = false;
+    }
+
+    // Returns a copy of the current process list.
+    std::vector<Process> getProcesses() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return processes_;
+    }
+
+    bool isUpdating() const {
+        return isUpdating_.load();
+    }
+
+private:
+    std::vector<Process> processes_;
+    mutable std::mutex mutex_;
+    std::atomic<bool> isUpdating_;
+};
 
 #endif // PROCESS_MONITOR_H

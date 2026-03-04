@@ -3,6 +3,7 @@
 
 CMakeFiles/spm.dir/src/main.cpp.obj
  D:/project/system/SPM/implementation/src/main.cpp
+ D:/project/system/SPM/implementation/include/Formatter.h
  D:/project/system/SPM/implementation/include/Logger.h
  D:/project/system/SPM/implementation/include/ProcessControl.h
  D:/project/system/SPM/implementation/include/ProcessMonitor.h
