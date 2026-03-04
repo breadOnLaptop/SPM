@@ -29,7 +29,11 @@ include_directories(third_party/glfw/include)
 
 file(GLOB SOURCES "src/*.cpp")
 
-add_executable(spm ${SOURCES} ${IMGUI_SOURCES})
+if(WIN32)
+    add_executable(spm WIN32 ${SOURCES} ${IMGUI_SOURCES})
+else()
+    add_executable(spm ${SOURCES} ${IMGUI_SOURCES})
+endif()
 
 target_link_libraries(spm glfw)
 
