@@ -31,39 +31,55 @@
 ### Prerequisites
 - **CMake** (3.10 or newer)
 - **Compiler**: 
-  - Windows: MinGW-w64 (64-bit)
-  - Linux: GCC/G++
+  - Windows: MinGW-w64 (64-bit) or MSVC
+  - Linux: GCC/G++ (Requires `build-essential`, `libglfw3-dev`, `libgl1-mesa-dev`, `libx11-dev`, etc.)
 
 ### Building from Source
+
+#### Windows (MinGW)
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/breadOnLaptop/SPM.git
-   cd SPM/implementation
+   cd SPM
    ```
-
 2. **Generate build files**:
    ```bash
    mkdir build
    cd build
    cmake -G "MinGW Makefiles" ..
    ```
-
 3. **Compile**:
    ```bash
    mingw32-make
    ```
 
-4. **Run**:
-   - Double-click `spm.exe` in the `build` folder (Windows) or run `./spm` (Linux).
+#### Linux
+1. **Install dependencies**:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt update
+   sudo apt install build-essential cmake libglfw3-dev libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+   ```
+2. **Build**:
+   ```bash
+   cd SPM
+   mkdir build
+   cd build
+   cmake ..
+   make
+   ```
+3. **Run**:
+   ```bash
+   ./spm
+   ```
 
 ## 📂 Repository Structure
 ```
 SPM/
-├── implementation/
-│   ├── include/       # Core backend & UI headers
-│   ├── src/           # Implementation logic
-│   ├── third_party/   # Vendored Dear ImGui & GLFW
-│   └── CMakeLists.txt # Build configuration
+├── include/       # Core backend & UI headers
+├── src/           # Implementation logic
+├── third_party/   # Vendored Dear ImGui & GLFW
+├── CMakeLists.txt # Build configuration
 └── README.md
 ```
 
