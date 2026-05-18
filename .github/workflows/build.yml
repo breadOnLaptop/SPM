@@ -1,0 +1,98 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libglfw3-dev libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      
+    - name: Build
+      run: cmake --build build --config Release
+      
+    - name: Package Linux
+      run: |
+        mkdir -p release-linux
+        cp build/spm release-linux/
+        echo "#!/bin/bash" > release-linux/run.sh
+        echo "./spm" >> release-linux/run.sh
+        chmod +x release-linux/run.sh release-linux/spm
+        tar -czvf spm-linux.tar.gz -C release-linux .
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: spm-linux
+        path: spm-linux.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      
+    - name: Build
+      run: cmake --build build --config Release
+      
+    - name: Package Windows
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path release-windows
+        Copy-Item build/Release/spm.exe release-windows/
+        # Collect system DLLs (as fallbacks, though static linking is preferred)
+        $vcDlls = @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+        foreach ($dll in $vcDlls) {
+            $dllPath = Get-ChildItem -Path "C:\Windows\System32" -Filter $dll | Select-Object -First 1
+            if ($dllPath) {
+                Copy-Item $dllPath.FullName release-windows/
+            }
+        }
+        Compress-Archive -Path release-windows/* -DestinationPath spm-windows.zip
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: spm-windows
+        path: spm-windows.zip
+
+  release:
+    needs: [build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spm-linux
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spm-windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            spm-linux.tar.gz
+            spm-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

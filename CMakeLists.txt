@@ -31,6 +31,10 @@ file(GLOB SOURCES "src/*.cpp")
 
 if(WIN32)
     add_executable(spm WIN32 ${SOURCES} ${IMGUI_SOURCES})
+    # Ensure static linking for some runtimes if using MSVC to reduce DLL dependencies
+    if(MSVC)
+        set_target_properties(spm PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 else()
     add_executable(spm ${SOURCES} ${IMGUI_SOURCES})
 endif()
