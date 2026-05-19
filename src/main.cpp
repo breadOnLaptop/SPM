@@ -137,10 +137,11 @@ int main() {
                 string filterStr = string(searchFilter);
                 transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
 
-                if (ImGui::BeginTable("ProcessTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
+                if (ImGui::BeginTable("ProcessTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
                     ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 70.0f);
                     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Threads", ImGuiTableColumnFlags_WidthFixed, 60.0f);
                     ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Mem (MB)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
                     ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
@@ -157,9 +158,10 @@ int main() {
                                         case 0: delta = (a.pid - b.pid); break;
                                         case 1: delta = a.name.compare(b.name); break;
                                         case 2: delta = a.status.compare(b.status); break;
-                                        case 3: delta = (a.priority - b.priority); break;
-                                        case 4: delta = (a.memoryMB < b.memoryMB) ? -1 : (a.memoryMB > b.memoryMB) ? 1 : 0; break;
-                                        case 5: delta = a.owner.compare(b.owner); break;
+                                        case 3: delta = (a.threadCount - b.threadCount); break;
+                                        case 4: delta = (a.priority - b.priority); break;
+                                        case 5: delta = (a.memoryMB < b.memoryMB) ? -1 : (a.memoryMB > b.memoryMB) ? 1 : 0; break;
+                                        case 6: delta = a.owner.compare(b.owner); break;
                                     }
                                     if (delta > 0) return (spec->SortDirection == ImGuiSortDirection_Ascending);
                                     if (delta < 0) return (spec->SortDirection == ImGuiSortDirection_Descending);
@@ -185,9 +187,10 @@ int main() {
                         }
                         ImGui::TableSetColumnIndex(1); ImGui::Text("%s", proc.name.c_str());
                         ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
-                        ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
-                        ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
-                        ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+                        ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.threadCount);
+                        ImGui::TableSetColumnIndex(4); ImGui::Text("%d", proc.priority);
+                        ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", proc.memoryMB);
+                        ImGui::TableSetColumnIndex(6); ImGui::Text("%s", proc.owner.c_str());
                     }
                     ImGui::EndTable();
                 }
@@ -198,6 +201,16 @@ int main() {
                 if (selectedPid != -1) {
                     ImGui::Text("PID: %d", selectedPid);
                     ImGui::Text("Owner: %s", selectedOwner.c_str());
+                    
+                    // Find selected process for extra details
+                    for (const auto& p : processes) {
+                        if (p.pid == selectedPid) {
+                            ImGui::Text("Threads: %d", p.threadCount);
+                            ImGui::Text("Status: %s", p.status.c_str());
+                            break;
+                        }
+                    }
+
                     bool isProtected = isSystemProcess(selectedOwner);
                     if (isProtected) { ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "System Protected"); ImGui::BeginDisabled(); }
                     if (ImGui::Button("Terminate", ImVec2(-FLT_MIN, 40))) { if (killProcess(selectedPid)) { selectedPid = -1; g_Snapshot.refresh(); } }
