@@ -5,6 +5,7 @@
 #include <chrono>
 #include <algorithm>
 #include <atomic>
+#include <map>
 #include "ProcessMonitor.h"
 #include "ProcessControl.h"
 #include "WindowManager.h"
@@ -138,37 +139,24 @@ int main() {
                 transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
 
                 if (ImGui::BeginTable("ProcessTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
-                    ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 70.0f);
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 70.0f);
                     ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
                     ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Mem (MB)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
                     ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
                     ImGui::TableHeadersRow();
 
-                    // Handle Sorting
-                    if (ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs()) {
-                        if (sorts_specs->SpecsCount > 0) {
-                            sort(processes.begin(), processes.end(), [&](const Process& a, const Process& b) {
-                                for (int n = 0; n < sorts_specs->SpecsCount; n++) {
-                                    const ImGuiTableColumnSortSpecs* spec = &sorts_specs->Specs[n];
-                                    int delta = 0;
-                                    switch (spec->ColumnIndex) {
-                                        case 0: delta = (a.pid - b.pid); break;
-                                        case 1: delta = a.name.compare(b.name); break;
-                                        case 2: delta = a.status.compare(b.status); break;
-                                        case 3: delta = (a.priority - b.priority); break;
-                                        case 4: delta = (a.memoryMB < b.memoryMB) ? -1 : (a.memoryMB > b.memoryMB) ? 1 : 0; break;
-                                        case 5: delta = a.owner.compare(b.owner); break;
-                                    }
-                                    if (delta > 0) return (spec->SortDirection == ImGuiSortDirection_Ascending);
-                                    if (delta < 0) return (spec->SortDirection == ImGuiSortDirection_Descending);
-                                }
-                                return a.pid < b.pid;
-                            });
-                        }
-                    }
+                    auto processes = g_Snapshot.getProcesses();
+                    string filterStr = string(searchFilter);
+                    transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
 
+                    // Sort all processes first so children are sorted within groups if we display them
+                    // For simplicity in this grouped view, we will mostly sort the groups by name.
+                    // If sorting is by something else, we aggregate.
+                    
+                    // Grouping by Name
+                    map<string, vector<Process>> grouped;
                     for (const auto& proc : processes) {
                         string nameLower = proc.name;
                         string ownerLower = proc.owner;
@@ -176,18 +164,65 @@ int main() {
                         transform(ownerLower.begin(), ownerLower.end(), ownerLower.begin(), ::tolower);
                         if (!filterStr.empty() && nameLower.find(filterStr) == string::npos && ownerLower.find(filterStr) == string::npos)
                             continue;
+                        grouped[proc.name].push_back(proc);
+                    }
+
+                    for (auto& pair : grouped) {
+                        const string& name = pair.first;
+                        auto& group = pair.second;
+                        
+                        double totalMem = 0;
+                        for (const auto& p : group) totalMem += p.memoryMB;
+
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-                        bool isSelected = (selectedPid == proc.pid);
-                        if (ImGui::Selectable(to_string(proc.pid).c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
-                            selectedPid = proc.pid;
-                            selectedOwner = proc.owner;
+                        
+                        bool isGroup = group.size() > 1;
+                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_OpenOnArrow;
+                        if (!isGroup) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                        
+                        bool open = ImGui::TreeNodeEx(name.c_str(), flags);
+                        if (ImGui::IsItemClicked()) {
+                            if (!isGroup) {
+                                selectedPid = group[0].pid;
+                                selectedOwner = group[0].owner;
+                            }
                         }
-                        ImGui::TableSetColumnIndex(1); ImGui::Text("%s", proc.name.c_str());
-                        ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
-                        ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
-                        ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
-                        ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+
+                        if (isGroup) {
+                            ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("(%d)", (int)group.size());
+                            ImGui::TableSetColumnIndex(2); ImGui::Text("-");
+                            ImGui::TableSetColumnIndex(3); ImGui::Text("-");
+                            ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", totalMem);
+                            ImGui::TableSetColumnIndex(5); ImGui::Text("-");
+                        } else {
+                            const auto& proc = group[0];
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%d", proc.pid);
+                            ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
+                            ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
+                            ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
+                            ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+                        }
+
+                        if (open && isGroup) {
+                            for (const auto& proc : group) {
+                                ImGui::TableNextRow();
+                                ImGui::TableSetColumnIndex(0);
+                                bool isSelected = (selectedPid == proc.pid);
+                                char pidLabel[32];
+                                snprintf(pidLabel, sizeof(pidLabel), "PID: %d", proc.pid);
+                                if (ImGui::Selectable(pidLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                                    selectedPid = proc.pid;
+                                    selectedOwner = proc.owner;
+                                }
+                                ImGui::TableSetColumnIndex(1); ImGui::Text("%d", proc.pid);
+                                ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
+                                ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
+                                ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
+                                ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+                            }
+                            ImGui::TreePop();
+                        }
                     }
                     ImGui::EndTable();
                 }

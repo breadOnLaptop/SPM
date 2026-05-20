@@ -27,6 +27,7 @@
 // Structure representing a process.
 struct Process {
     int pid;
+    int parentPid;
     std::string name;
     std::string status;
     int priority;
@@ -89,6 +90,7 @@ inline std::string getProcessOwner(HANDLE hProcess) {
 inline Process getProcessInfo(int pid, const PROCESSENTRY32 &pe32) {
     Process proc;
     proc.pid = pid;
+    proc.parentPid = static_cast<int>(pe32.th32ParentProcessID);
     #if defined(UNICODE) || defined(_UNICODE)
         std::wstring wname(pe32.szExeFile);
         proc.name = wstringToUtf8(wname);
@@ -147,6 +149,7 @@ inline Process getProcessInfo(int pid) {
 inline Process getProcessInfo(int pid) {
     Process proc;
     proc.pid = pid;
+    proc.parentPid = 0;
     proc.memoryMB = 0.0;
     proc.owner = "Unknown";
 
@@ -185,13 +188,15 @@ inline Process getProcessInfo(int pid) {
     if (fgets(buffer, sizeof(buffer), f)) {
         std::string line(buffer);
         size_t start = line.find('(');
-        size_t end = line.find(')');
+        size_t end = line.rfind(')');
         if (start != std::string::npos && end != std::string::npos && end > start) {
             proc.name = line.substr(start + 1, end - start - 1);
         }
-        size_t statePos = end + 2;
-        if (statePos < line.size()) {
-            char stateChar = line[statePos];
+        
+        char stateChar;
+        int ppid;
+        if (sscanf(line.c_str() + end + 1, " %c %d", &stateChar, &ppid) == 2) {
+            proc.parentPid = ppid;
             switch (stateChar) {
                 case 'R': proc.status = "Running"; break;
                 case 'S': proc.status = "Sleeping/Idle"; break;
