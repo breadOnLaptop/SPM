@@ -38,7 +38,7 @@ namespace {
         return owner;
     }
 
-    Process getProcessInfo(int pid, const PROCESSENTRY32W &pe32) {
+    Process getProcessInfoInternal(int pid, const PROCESSENTRY32W &pe32) {
         Process proc;
         proc.pid = pid;
         proc.parentPid = static_cast<int>(pe32.th32ParentProcessID);
@@ -70,7 +70,10 @@ namespace {
     }
 }
 
+ProcessSnapshot::ProcessSnapshot() : isUpdating_(false) {}
+
 void ProcessSnapshot::refresh() {
+    isUpdating_ = true;
     std::vector<Process> newProcesses;
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot != INVALID_HANDLE_VALUE) {
@@ -78,13 +81,14 @@ void ProcessSnapshot::refresh() {
         pe32.dwSize = sizeof(PROCESSENTRY32W);
         if (Process32FirstW(hSnapshot, &pe32)) {
             do {
-                newProcesses.push_back(getProcessInfo(pe32.th32ProcessID, pe32));
+                newProcesses.push_back(getProcessInfoInternal(pe32.th32ProcessID, pe32));
             } while (Process32NextW(hSnapshot, &pe32));
         }
         CloseHandle(hSnapshot);
     }
-    std::lock_guard<std::mutex> lock(mtx);
-    processes = std::move(newProcesses);
+    std::lock_guard<std::mutex> lock(mutex_);
+    processes_ = std::move(newProcesses);
+    isUpdating_ = false;
 }
 
 #else
@@ -96,7 +100,10 @@ void ProcessSnapshot::refresh() {
 #include <pwd.h>
 #include <sys/stat.h>
 
+ProcessSnapshot::ProcessSnapshot() : isUpdating_(false) {}
+
 void ProcessSnapshot::refresh() {
+    isUpdating_ = true;
     std::vector<Process> newProcesses;
     DIR* dir = opendir("/proc");
     if (dir) {
@@ -106,7 +113,6 @@ void ProcessSnapshot::refresh() {
                 int pid = atoi(entry->d_name);
                 std::string path = "/proc/" + std::string(entry->d_name);
                 
-                // Name & Parent PID & Threads from /proc/[pid]/stat
                 std::ifstream statFile(path + "/stat");
                 std::string line;
                 if (std::getline(statFile, line)) {
@@ -120,21 +126,22 @@ void ProcessSnapshot::refresh() {
                         std::string rest = line.substr(lastParen + 2);
                         std::stringstream ss(rest);
                         std::string state;
-                        int ppid, pgrp, session, tty_nr, tpgid;
-                        unsigned int flags;
-                        unsigned long minflt, cminflt, majflt, cmajflt, utime, stime;
-                        long cutime, cstime, priority, nice, num_threads;
+                        int ppid;
+                        long num_threads, nice;
                         
-                        ss >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags 
-                           >> minflt >> cminflt >> majflt >> cmajflt >> utime >> stime 
-                           >> cutime >> cstime >> priority >> nice >> num_threads;
+                        // Skip unneeded fields
+                        std::string tmp;
+                        ss >> state >> ppid;
+                        for(int i=0; i<14; ++i) ss >> tmp;
+                        ss >> nice;
+                        for(int i=0; i<1; ++i) ss >> tmp;
+                        ss >> num_threads;
 
                         proc.status = (state == "R" ? "Running" : (state == "S" ? "Sleeping" : "Other"));
                         proc.parentPid = ppid;
                         proc.threadCount = static_cast<int>(num_threads);
                         proc.priority = static_cast<int>(nice);
 
-                        // Memory from /proc/[pid]/status
                         std::ifstream statusFile(path + "/status");
                         std::string statusLine;
                         proc.memoryMB = 0;
@@ -148,7 +155,6 @@ void ProcessSnapshot::refresh() {
                             }
                         }
 
-                        // Owner
                         struct stat st;
                         if (stat(path.c_str(), &st) == 0) {
                             struct passwd* pw = getpwuid(st.st_uid);
@@ -162,12 +168,17 @@ void ProcessSnapshot::refresh() {
         }
         closedir(dir);
     }
-    std::lock_guard<std::mutex> lock(mtx);
-    processes = std::move(newProcesses);
+    std::lock_guard<std::mutex> lock(mutex_);
+    processes_ = std::move(newProcesses);
+    isUpdating_ = false;
 }
 #endif
 
-std::vector<Process> ProcessSnapshot::getProcesses() {
-    std::lock_guard<std::mutex> lock(mtx);
-    return processes;
+std::vector<Process> ProcessSnapshot::getProcesses() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return processes_;
+}
+
+bool ProcessSnapshot::isUpdating() const {
+    return isUpdating_;
 }
