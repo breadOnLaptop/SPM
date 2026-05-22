@@ -5,6 +5,7 @@
 #include <chrono>
 #include <algorithm>
 #include <atomic>
+#include <map>
 #include "ProcessMonitor.h"
 #include "ProcessControl.h"
 #include "WindowManager.h"
@@ -137,38 +138,29 @@ int main() {
                 string filterStr = string(searchFilter);
                 transform(filterStr.begin(), filterStr.end(), filterStr.begin(), ::tolower);
 
-                if (ImGui::BeginTable("ProcessTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
-                    ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 70.0f);
-                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+                if (ImGui::BeginTable("ProcessTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()))) {
+                    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("PID", ImGuiTableColumnFlags_WidthFixed, 70.0f);
                     ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Threads", ImGuiTableColumnFlags_WidthFixed, 60.0f);
                     ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Mem (MB)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
                     ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
                     ImGui::TableHeadersRow();
 
-                    // Handle Sorting
-                    if (ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs()) {
-                        if (sorts_specs->SpecsCount > 0) {
-                            sort(processes.begin(), processes.end(), [&](const Process& a, const Process& b) {
-                                for (int n = 0; n < sorts_specs->SpecsCount; n++) {
-                                    const ImGuiTableColumnSortSpecs* spec = &sorts_specs->Specs[n];
-                                    int delta = 0;
-                                    switch (spec->ColumnIndex) {
-                                        case 0: delta = (a.pid - b.pid); break;
-                                        case 1: delta = a.name.compare(b.name); break;
-                                        case 2: delta = a.status.compare(b.status); break;
-                                        case 3: delta = (a.priority - b.priority); break;
-                                        case 4: delta = (a.memoryMB < b.memoryMB) ? -1 : (a.memoryMB > b.memoryMB) ? 1 : 0; break;
-                                        case 5: delta = a.owner.compare(b.owner); break;
-                                    }
-                                    if (delta > 0) return (spec->SortDirection == ImGuiSortDirection_Ascending);
-                                    if (delta < 0) return (spec->SortDirection == ImGuiSortDirection_Descending);
-                                }
-                                return a.pid < b.pid;
-                            });
-                        }
-                    }
-
+                    // 1. Group processes in a temporary map
+                    struct ProcessGroup {
+                        string name;
+                        vector<Process> children;
+                        double totalMem = 0;
+                        int totalThreads = 0;
+                        int representativePid = 0;
+                        string representativeStatus;
+                        string representativeOwner;
+                        int representativePriority = 0;
+                    };
+                    
+                    map<string, ProcessGroup> groupMap;
                     for (const auto& proc : processes) {
                         string nameLower = proc.name;
                         string ownerLower = proc.owner;
@@ -176,18 +168,101 @@ int main() {
                         transform(ownerLower.begin(), ownerLower.end(), ownerLower.begin(), ::tolower);
                         if (!filterStr.empty() && nameLower.find(filterStr) == string::npos && ownerLower.find(filterStr) == string::npos)
                             continue;
+                        
+                        auto& g = groupMap[proc.name];
+                        g.name = proc.name;
+                        g.children.push_back(proc);
+                        g.totalMem += proc.memoryMB;
+                        g.totalThreads += proc.threadCount;
+                        if (g.children.size() == 1) { // First process is representative
+                            g.representativePid = proc.pid;
+                            g.representativeStatus = proc.status;
+                            g.representativeOwner = proc.owner;
+                            g.representativePriority = proc.priority;
+                        }
+                    }
+
+                    // 2. Convert map to vector for sorting
+                    vector<ProcessGroup> groupList;
+                    for (auto& pair : groupMap) groupList.push_back(move(pair.second));
+
+                    // 3. Handle Sorting of Groups
+                    if (ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs()) {
+                        if (sorts_specs->SpecsCount > 0) {
+                            sort(groupList.begin(), groupList.end(), [&](const ProcessGroup& a, const ProcessGroup& b) {
+                                for (int n = 0; n < sorts_specs->SpecsCount; n++) {
+                                    const ImGuiTableColumnSortSpecs* spec = &sorts_specs->Specs[n];
+                                    int delta = 0;
+                                    switch (spec->ColumnIndex) {
+                                        case 0: delta = a.name.compare(b.name); break;
+                                        case 1: delta = (a.children.size() > 1 || b.children.size() > 1) ? 0 : (a.representativePid - b.representativePid); break;
+                                        case 2: delta = a.representativeStatus.compare(b.representativeStatus); break;
+                                        case 3: delta = (a.totalThreads - b.totalThreads); break;
+                                        case 4: delta = (a.representativePriority - b.representativePriority); break;
+                                        case 5: delta = (a.totalMem < b.totalMem) ? -1 : (a.totalMem > b.totalMem) ? 1 : 0; break;
+                                        case 6: delta = a.representativeOwner.compare(b.representativeOwner); break;
+                                    }
+                                    if (delta != 0) {
+                                        if (spec->SortDirection == ImGuiSortDirection_Ascending) return delta < 0;
+                                        return delta > 0;
+                                    }
+                                }
+                                return a.name < b.name;
+                            });
+                        }
+                    }
+
+                    for (auto& group : groupList) {
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-                        bool isSelected = (selectedPid == proc.pid);
-                        if (ImGui::Selectable(to_string(proc.pid).c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
-                            selectedPid = proc.pid;
-                            selectedOwner = proc.owner;
+                        
+                        bool isGroup = group.children.size() > 1;
+                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_OpenOnArrow;
+                        if (!isGroup) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                        
+                        bool open = ImGui::TreeNodeEx(group.name.c_str(), flags);
+                        if (ImGui::IsItemClicked() && !isGroup) {
+                            selectedPid = group.representativePid;
+                            selectedOwner = group.representativeOwner;
                         }
-                        ImGui::TableSetColumnIndex(1); ImGui::Text("%s", proc.name.c_str());
-                        ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
-                        ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.priority);
-                        ImGui::TableSetColumnIndex(4); ImGui::Text("%.2f", proc.memoryMB);
-                        ImGui::TableSetColumnIndex(5); ImGui::Text("%s", proc.owner.c_str());
+
+                        if (isGroup) {
+                            ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("(%d)", (int)group.children.size());
+                            ImGui::TableSetColumnIndex(2); ImGui::Text("-");
+                            ImGui::TableSetColumnIndex(3); ImGui::Text("%d", group.totalThreads);
+                            ImGui::TableSetColumnIndex(4); ImGui::Text("-");
+                            ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", group.totalMem);
+                            ImGui::TableSetColumnIndex(6); ImGui::Text("-");
+                        } else {
+                            const auto& proc = group.children[0];
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%d", proc.pid);
+                            ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
+                            ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.threadCount);
+                            ImGui::TableSetColumnIndex(4); ImGui::Text("%d", proc.priority);
+                            ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", proc.memoryMB);
+                            ImGui::TableSetColumnIndex(6); ImGui::Text("%s", proc.owner.c_str());
+                        }
+
+                        if (open && isGroup) {
+                            for (const auto& proc : group.children) {
+                                ImGui::TableNextRow();
+                                ImGui::TableSetColumnIndex(0);
+                                bool isSelected = (selectedPid == proc.pid);
+                                char pidLabel[64];
+                                snprintf(pidLabel, sizeof(pidLabel), "  PID: %d", proc.pid);
+                                if (ImGui::Selectable(pidLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                                    selectedPid = proc.pid;
+                                    selectedOwner = proc.owner;
+                                }
+                                ImGui::TableSetColumnIndex(1); ImGui::Text("%d", proc.pid);
+                                ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
+                                ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.threadCount);
+                                ImGui::TableSetColumnIndex(4); ImGui::Text("%d", proc.priority);
+                                ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", proc.memoryMB);
+                                ImGui::TableSetColumnIndex(6); ImGui::Text("%s", proc.owner.c_str());
+                            }
+                            ImGui::TreePop();
+                        }
                     }
                     ImGui::EndTable();
                 }
@@ -198,6 +273,16 @@ int main() {
                 if (selectedPid != -1) {
                     ImGui::Text("PID: %d", selectedPid);
                     ImGui::Text("Owner: %s", selectedOwner.c_str());
+                    
+                    // Find selected process for extra details
+                    for (const auto& p : processes) {
+                        if (p.pid == selectedPid) {
+                            ImGui::Text("Threads: %d", p.threadCount);
+                            ImGui::Text("Status: %s", p.status.c_str());
+                            break;
+                        }
+                    }
+
                     bool isProtected = isSystemProcess(selectedOwner);
                     if (isProtected) { ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "System Protected"); ImGui::BeginDisabled(); }
                     if (ImGui::Button("Terminate", ImVec2(-FLT_MIN, 40))) { if (killProcess(selectedPid)) { selectedPid = -1; g_Snapshot.refresh(); } }
