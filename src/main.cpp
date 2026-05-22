@@ -148,8 +148,19 @@ int main() {
                     ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 140.0f);
                     ImGui::TableHeadersRow();
 
-                    // Grouping by Name
-                    map<string, vector<Process>> grouped;
+                    // 1. Group processes in a temporary map
+                    struct ProcessGroup {
+                        string name;
+                        vector<Process> children;
+                        double totalMem = 0;
+                        int totalThreads = 0;
+                        int representativePid = 0;
+                        string representativeStatus;
+                        string representativeOwner;
+                        int representativePriority = 0;
+                    };
+                    
+                    map<string, ProcessGroup> groupMap;
                     for (const auto& proc : processes) {
                         string nameLower = proc.name;
                         string ownerLower = proc.owner;
@@ -157,44 +168,73 @@ int main() {
                         transform(ownerLower.begin(), ownerLower.end(), ownerLower.begin(), ::tolower);
                         if (!filterStr.empty() && nameLower.find(filterStr) == string::npos && ownerLower.find(filterStr) == string::npos)
                             continue;
-                        grouped[proc.name].push_back(proc);
+                        
+                        auto& g = groupMap[proc.name];
+                        g.name = proc.name;
+                        g.children.push_back(proc);
+                        g.totalMem += proc.memoryMB;
+                        g.totalThreads += proc.threadCount;
+                        if (g.children.size() == 1) { // First process is representative
+                            g.representativePid = proc.pid;
+                            g.representativeStatus = proc.status;
+                            g.representativeOwner = proc.owner;
+                            g.representativePriority = proc.priority;
+                        }
                     }
 
-                    for (auto& pair : grouped) {
-                        const string& name = pair.first;
-                        auto& group = pair.second;
-                        
-                        double totalMem = 0;
-                        int totalThreads = 0;
-                        for (const auto& p : group) {
-                            totalMem += p.memoryMB;
-                            totalThreads += p.threadCount;
-                        }
+                    // 2. Convert map to vector for sorting
+                    vector<ProcessGroup> groupList;
+                    for (auto& pair : groupMap) groupList.push_back(move(pair.second));
 
+                    // 3. Handle Sorting of Groups
+                    if (ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs()) {
+                        if (sorts_specs->SpecsCount > 0) {
+                            sort(groupList.begin(), groupList.end(), [&](const ProcessGroup& a, const ProcessGroup& b) {
+                                for (int n = 0; n < sorts_specs->SpecsCount; n++) {
+                                    const ImGuiTableColumnSortSpecs* spec = &sorts_specs->Specs[n];
+                                    int delta = 0;
+                                    switch (spec->ColumnIndex) {
+                                        case 0: delta = a.name.compare(b.name); break;
+                                        case 1: delta = (a.children.size() > 1 || b.children.size() > 1) ? 0 : (a.representativePid - b.representativePid); break;
+                                        case 2: delta = a.representativeStatus.compare(b.representativeStatus); break;
+                                        case 3: delta = (a.totalThreads - b.totalThreads); break;
+                                        case 4: delta = (a.representativePriority - b.representativePriority); break;
+                                        case 5: delta = (a.totalMem < b.totalMem) ? -1 : (a.totalMem > b.totalMem) ? 1 : 0; break;
+                                        case 6: delta = a.representativeOwner.compare(b.representativeOwner); break;
+                                    }
+                                    if (delta != 0) {
+                                        if (spec->SortDirection == ImGuiSortDirection_Ascending) return delta < 0;
+                                        return delta > 0;
+                                    }
+                                }
+                                return a.name < b.name;
+                            });
+                        }
+                    }
+
+                    for (auto& group : groupList) {
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
                         
-                        bool isGroup = group.size() > 1;
+                        bool isGroup = group.children.size() > 1;
                         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_OpenOnArrow;
                         if (!isGroup) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
                         
-                        bool open = ImGui::TreeNodeEx(name.c_str(), flags);
-                        if (ImGui::IsItemClicked()) {
-                            if (!isGroup) {
-                                selectedPid = group[0].pid;
-                                selectedOwner = group[0].owner;
-                            }
+                        bool open = ImGui::TreeNodeEx(group.name.c_str(), flags);
+                        if (ImGui::IsItemClicked() && !isGroup) {
+                            selectedPid = group.representativePid;
+                            selectedOwner = group.representativeOwner;
                         }
 
                         if (isGroup) {
-                            ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("(%d)", (int)group.size());
+                            ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("(%d)", (int)group.children.size());
                             ImGui::TableSetColumnIndex(2); ImGui::Text("-");
-                            ImGui::TableSetColumnIndex(3); ImGui::Text("%d", totalThreads);
+                            ImGui::TableSetColumnIndex(3); ImGui::Text("%d", group.totalThreads);
                             ImGui::TableSetColumnIndex(4); ImGui::Text("-");
-                            ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", totalMem);
+                            ImGui::TableSetColumnIndex(5); ImGui::Text("%.2f", group.totalMem);
                             ImGui::TableSetColumnIndex(6); ImGui::Text("-");
                         } else {
-                            const auto& proc = group[0];
+                            const auto& proc = group.children[0];
                             ImGui::TableSetColumnIndex(1); ImGui::Text("%d", proc.pid);
                             ImGui::TableSetColumnIndex(2); ImGui::Text("%s", proc.status.c_str());
                             ImGui::TableSetColumnIndex(3); ImGui::Text("%d", proc.threadCount);
@@ -204,12 +244,12 @@ int main() {
                         }
 
                         if (open && isGroup) {
-                            for (const auto& proc : group) {
+                            for (const auto& proc : group.children) {
                                 ImGui::TableNextRow();
                                 ImGui::TableSetColumnIndex(0);
                                 bool isSelected = (selectedPid == proc.pid);
-                                char pidLabel[32];
-                                snprintf(pidLabel, sizeof(pidLabel), "PID: %d", proc.pid);
+                                char pidLabel[64];
+                                snprintf(pidLabel, sizeof(pidLabel), "  PID: %d", proc.pid);
                                 if (ImGui::Selectable(pidLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
                                     selectedPid = proc.pid;
                                     selectedOwner = proc.owner;
